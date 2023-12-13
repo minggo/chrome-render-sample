@@ -1,1 +1,159 @@
-System.register([],(function(e){"use strict";return{execute:function(){e("default",function(){var e,t=!1,r=function(r){return void 0===r&&(r={}),"function"!=typeof r?Promise.reject(new Error("No wasm support detected")):r().then((function(r){t=!0,(e=r.instance).exports.__wasm_call_ctors()}))};function n(t,r,n,o,s,c){var u=e.exports.sbrk,i=n+3&-4,a=u(i*o),d=u(s.length),f=new Uint8Array(e.exports.memory.buffer);f.set(s,d);var p=t(a,n,o,d,s.length);if(0==p&&c&&c(a,i,o),r.set(f.subarray(a,a+n*o)),u(a-u(0)),0!=p)throw new Error("Malformed buffer data: "+p)}var o={NONE:"",OCTAHEDRAL:"meshopt_decodeFilterOct",QUATERNION:"meshopt_decodeFilterQuat",EXPONENTIAL:"meshopt_decodeFilterExp"},s={ATTRIBUTES:"meshopt_decodeVertexBuffer",TRIANGLES:"meshopt_decodeIndexBuffer",INDICES:"meshopt_decodeIndexSequence"},c=[],u=0;function i(e){var t={object:new Worker(e),pending:0,requests:{}};return t.object.onmessage=function(e){var r=e.data;t.pending-=r.count,t.requests[r.id][r.action](r.value),delete t.requests[r.id]},t}function a(e){for(var t="var instance; var ready = WebAssembly.instantiate(new Uint8Array(["+new Uint8Array(unpack(wasm))+"]), {}).then(function(result) { instance = result.instance; instance.exports.__wasm_call_ctors(); });self.onmessage = workerProcess;"+n.toString()+d.toString(),r=new Blob([t],{type:"text/javascript"}),o=URL.createObjectURL(r),s=0;s<e;++s)c[s]=i(o);URL.revokeObjectURL(o)}function d(t){r.then((function(){var r=t.data;try{var o=new Uint8Array(r.count*r.size);n(e.exports[r.mode],o,r.count,r.size,r.source,e.exports[r.filter]),self.postMessage({id:r.id,count:r.count,action:"resolve",value:o},[o.buffer])}catch(e){self.postMessage({id:r.id,count:r.count,action:"reject",value:e})}}))}return{ready:r,supported:t,useWorkers:function(e){a(e)},decodeVertexBuffer:function(t,r,s,c,u){n(e.exports.meshopt_decodeVertexBuffer,t,r,s,c,e.exports[o[u]])},decodeIndexBuffer:function(t,r,o,s){n(e.exports.meshopt_decodeIndexBuffer,t,r,o,s)},decodeIndexSequence:function(t,r,o,s){n(e.exports.meshopt_decodeIndexSequence,t,r,o,s)},decodeGltfBuffer:function(t,r,c,u,i,a){n(e.exports[s[i]],t,r,c,u,e.exports[o[a]])},decodeGltfBufferAsync:function(t,i,a,d,f){return c.length>0?function(e,t,r,n,o){for(var s=c[0],i=1;i<c.length;++i)c[i].pending<s.pending&&(s=c[i]);return new Promise((function(c,i){var a=new Uint8Array(r),d=u++;s.pending+=e,s.requests[d]={resolve:c,reject:i},s.object.postMessage({id:d,count:e,size:t,source:a,mode:n,filter:o},[a.buffer])}))}(t,i,a,s[d],o[f]):r.then((function(){var r=new Uint8Array(t*i);return n(e.exports[s[d]],r,t,i,a,e.exports[o[f]]),r}))}}}())}}}));
+System.register([], (function (exports) {
+	'use strict';
+	return {
+		execute: (function () {
+
+			var MeshoptDecoder = exports('default', function () {
+
+			  var instance;
+			  var supported = false;
+			  var ready = function ready(instantiateWasm) {
+			    if (instantiateWasm === void 0) {
+			      instantiateWasm = {};
+			    }
+			    if (typeof instantiateWasm !== 'function') {
+			      return Promise.reject(new Error('No wasm support detected'));
+			    }
+			    return instantiateWasm().then(function (result) {
+			      supported = true;
+			      instance = result.instance;
+			      instance.exports.__wasm_call_ctors();
+			    });
+			  };
+			  function decode(fun, target, count, size, source, filter) {
+			    var sbrk = instance.exports.sbrk;
+			    var count4 = count + 3 & ~3;
+			    var tp = sbrk(count4 * size);
+			    var sp = sbrk(source.length);
+			    var heap = new Uint8Array(instance.exports.memory.buffer);
+			    heap.set(source, sp);
+			    var res = fun(tp, count, size, sp, source.length);
+			    if (res == 0 && filter) {
+			      filter(tp, count4, size);
+			    }
+			    target.set(heap.subarray(tp, tp + count * size));
+			    sbrk(tp - sbrk(0));
+			    if (res != 0) {
+			      throw new Error("Malformed buffer data: " + res);
+			    }
+			  }
+			  var filters = {
+			    NONE: "",
+			    OCTAHEDRAL: "meshopt_decodeFilterOct",
+			    QUATERNION: "meshopt_decodeFilterQuat",
+			    EXPONENTIAL: "meshopt_decodeFilterExp"
+			  };
+			  var decoders = {
+			    ATTRIBUTES: "meshopt_decodeVertexBuffer",
+			    TRIANGLES: "meshopt_decodeIndexBuffer",
+			    INDICES: "meshopt_decodeIndexSequence"
+			  };
+			  var workers = [];
+			  var requestId = 0;
+			  function createWorker(url) {
+			    var worker = {
+			      object: new Worker(url),
+			      pending: 0,
+			      requests: {}
+			    };
+			    worker.object.onmessage = function (event) {
+			      var data = event.data;
+			      worker.pending -= data.count;
+			      worker.requests[data.id][data.action](data.value);
+			      delete worker.requests[data.id];
+			    };
+			    return worker;
+			  }
+			  function initWorkers(count) {
+			    var source = "var instance; var ready = WebAssembly.instantiate(new Uint8Array([" + new Uint8Array(unpack(wasm)) + "]), {})" + ".then(function(result) { instance = result.instance; instance.exports.__wasm_call_ctors(); });" + "self.onmessage = workerProcess;" + decode.toString() + workerProcess.toString();
+			    var blob = new Blob([source], {
+			      type: 'text/javascript'
+			    });
+			    var url = URL.createObjectURL(blob);
+			    for (var i = 0; i < count; ++i) {
+			      workers[i] = createWorker(url);
+			    }
+			    URL.revokeObjectURL(url);
+			  }
+			  function decodeWorker(count, size, source, mode, filter) {
+			    var worker = workers[0];
+			    for (var i = 1; i < workers.length; ++i) {
+			      if (workers[i].pending < worker.pending) {
+			        worker = workers[i];
+			      }
+			    }
+			    return new Promise(function (resolve, reject) {
+			      var data = new Uint8Array(source);
+			      var id = requestId++;
+			      worker.pending += count;
+			      worker.requests[id] = {
+			        resolve: resolve,
+			        reject: reject
+			      };
+			      worker.object.postMessage({
+			        id: id,
+			        count: count,
+			        size: size,
+			        source: data,
+			        mode: mode,
+			        filter: filter
+			      }, [data.buffer]);
+			    });
+			  }
+			  function workerProcess(event) {
+			    ready.then(function () {
+			      var data = event.data;
+			      try {
+			        var target = new Uint8Array(data.count * data.size);
+			        decode(instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
+			        self.postMessage({
+			          id: data.id,
+			          count: data.count,
+			          action: "resolve",
+			          value: target
+			        }, [target.buffer]);
+			      } catch (error) {
+			        self.postMessage({
+			          id: data.id,
+			          count: data.count,
+			          action: "reject",
+			          value: error
+			        });
+			      }
+			    });
+			  }
+			  return {
+			    ready: ready,
+			    supported: supported,
+			    useWorkers: function useWorkers(count) {
+			      initWorkers(count);
+			    },
+			    decodeVertexBuffer: function decodeVertexBuffer(target, count, size, source, filter) {
+			      decode(instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, instance.exports[filters[filter]]);
+			    },
+			    decodeIndexBuffer: function decodeIndexBuffer(target, count, size, source) {
+			      decode(instance.exports.meshopt_decodeIndexBuffer, target, count, size, source);
+			    },
+			    decodeIndexSequence: function decodeIndexSequence(target, count, size, source) {
+			      decode(instance.exports.meshopt_decodeIndexSequence, target, count, size, source);
+			    },
+			    decodeGltfBuffer: function decodeGltfBuffer(target, count, size, source, mode, filter) {
+			      decode(instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
+			    },
+			    decodeGltfBufferAsync: function decodeGltfBufferAsync(count, size, source, mode, filter) {
+			      if (workers.length > 0) {
+			        return decodeWorker(count, size, source, decoders[mode], filters[filter]);
+			      }
+			      return ready.then(function () {
+			        var target = new Uint8Array(count * size);
+			        decode(instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
+			        return target;
+			      });
+			    }
+			  };
+			}());
+
+		})
+	};
+}));
+//# sourceMappingURL=meshopt_decoder.wasm-ebbcb6df.js.map
